@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name "distr_filter-rescue")(type "Legacy")(uri "${KIPRJMOD}/distr_filter-rescue.lib")(options "")(descr ""))
+)
