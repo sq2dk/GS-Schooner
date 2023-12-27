@@ -3,7 +3,8 @@
 
 #include <Stepper.h>       // for stepper motor in filter
 #include <Wire.h>
-#include <LiquidCrystal_I2C.h>
+#include <LiquidCrystal_I2C.h>   //although it is not for STM32 it works.
+#include <IWatchdog.h>               //watchdog 
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
@@ -26,7 +27,7 @@ byte steps_per_MHz = 93;    // number of steps per MHz of cf band change
 long initial_qrg = 440870;  // freqiency in kHz (frequency after reset / on limit switch)
 long global_qrg;            // current frq;
 byte global_att = 1;        // global_var atteunation;
-byte bypass_on = 0;         // bypass sysus 1=on, 0=off
+byte bypass_on = 1;         // bypass sysus 1=on, 0=off
 byte tx_on = 0;             // tx status 1=on, 0=off;
 String comm;
 int letter=0;
@@ -40,8 +41,10 @@ byte filter_ok=1;           // status of filter 1=OK, 0=ERROR
 byte err_code=0;            // error code - 0=no error - bit coded
 byte enc_changed=0;         // encoder or keyboard position change indicator
 byte kbd_enable=1;          // is keyboard enabled
+byte TX_mode=0;
 long menu_timeout=menu_timeout_max;     // display menu timout [ms]
 byte menu_item=0;           // actie menu item
+byte debug_level=1;         // debug level 1=only essential feedback
 
 volatile uint32_t encoderCount;
 
@@ -86,6 +89,8 @@ void setup() {
 
   attachInterrupt(digitalPinToInterrupt(KEY_R), menuDisplay, LOW);
   attachInterrupt(digitalPinToInterrupt(KEY_L), menuExe, LOW);
+
+  
   
   pinMode(FLTR_BPS, OUTPUT);                // Pin stiching baypass realy. LOW-signal going through filter, HIGH-filter bypass
   
@@ -105,15 +110,19 @@ void setup() {
   Cable_interrupt();
  
   if (filter_ok){
-     Serial1.println("Reset to zero");
+     if (debug_level>1) Serial1.println("Reset to zero");
      reset_step();
   }
+
+IWatchdog.begin(500000);    //watchdog set to approx 500ms
+
 }
 
 
 void keyb_enable(){
  #ifdef LIBMAPLE_CORE  
   systick_attach_callback(&encoder1_read);
+  //interrupts();
   kbd_enable=1;
   #endif  
  }
@@ -122,6 +131,7 @@ void keyb_enable(){
 void keyb_disable(){
    #ifdef LIBMAPLE_CORE  
   systick_attach_callback();
+  //noInterrupts();
   kbd_enable=0;
   #endif  
  
@@ -143,7 +153,7 @@ void encoder1_read(void)
       if (digitalRead(KEY_L)==LOW){              //if with encoder moement we have left key pressed
         global_att++;
         if (global_att>127) {global_att=127;}
-        Serial1.println(global_att);
+        if (debug_level>1) Serial1.println(global_att);
 
       }
       else {
@@ -154,7 +164,7 @@ void encoder1_read(void)
       if (digitalRead(KEY_L)==LOW){              //if with encoder moement we have left key pressed
         if (global_att==1) {global_att=2;}
         global_att--;
-        Serial1.println(global_att);
+        if (debug_level>1) Serial1.println(global_att);
         
       }
       else {
@@ -178,7 +188,8 @@ timer_start=millis();
      lcd.setCursor(14, 0);
      lcd.print("TX");
      digitalWrite(LED_Y,HIGH);
-     Serial1.println("TRANSMIT");
+     TX_mode=1;
+     if (debug_level>1) Serial1.println("TRANSMIT");
      
      while (((time_elapsed<100)) & (digitalRead(LNABOX_FEEDBACK)==HIGH) )    //repeat untill time elapsed < 100ms and feedbak received
      {
@@ -197,22 +208,28 @@ timer_start=millis();
         digitalWrite(PTT_INH, LOW);          // do not allow to start TX
         tx_on=0;                              
       }
-       // Serial1.print(timer_start);
-       // Serial1.print(" ");
-       // Serial1.print(millis());
-       // Serial1.print(" ");
-       // Serial1.println(time_elapsed);
+      if (debug_level>2)
+        {
+         Serial1.print(timer_start);
+         Serial1.print(" ");
+         Serial1.print(millis());
+         Serial1.print(" ");
+         Serial1.println(time_elapsed);
+        }
 
      
   }
-  else {
+  else 
+  //if (RX_enable)               // we actually do not need this here
+  {
      set_att(global_att);        //return to previous att
      disp_qrg(global_qrg);
+     TX_mode=0;
      //digitalWrite(FLTR_BPS, LOW);
      lcd.setCursor(14, 0);
      lcd.print("RX");
      digitalWrite(LED_Y,LOW);
-     Serial1.println("RECEIVE ");
+     if (debug_level>1) Serial1.println("RECEIVE ");
      digitalWrite(PTT_INH, LOW);
     // tx_on=0;
   }
@@ -223,12 +240,13 @@ timer_start=millis();
   error_handler();
 }
 
-void Cable_interrupt() {
+void Cable_interrupt() {                    //this activates when tere is an change from radio (cable connected or radio switched on/off)
   err_code=(err_code & B11111110);         // reesets code for this procedure
   if (digitalRead(CABLE_CONNECTED)==LOW)
    {
      RX_enable=0;
      err_code=(err_code | B00000001);
+     //digitalWrite(PTT_FORCE,HIGH);                               //forces TX path to actiate - we ave to assume, that no LNA box is connected.
    }
    else
    {
@@ -320,7 +338,8 @@ err_code=(err_code & B11111101);                                //resets error c
      myStepper.step(1);
      delay(5);
      steps_made++;
-     //Serial1.print("-");
+      if (debug_level>2) Serial1.print("-");
+      IWatchdog.reload();             //restet watchdog
      if (steps_made>2100) 
       {
         filter_ok=0;
@@ -330,6 +349,7 @@ err_code=(err_code & B11111101);                                //resets error c
   steps_made=0;
    while ((digitalRead(filter_limit_pin)==HIGH) and (filter_ok)){
      myStepper.step(-1);
+     IWatchdog.reload();             //restet watchdog
      delay(50);
      steps_made++;
      if (steps_made>20)
@@ -402,9 +422,10 @@ byte tx_line_status;
 }
 
 
-void send_nmea_status(){
+void send_status(){            
+                        //Status : "STST, Approx freq in kHz, number of steps of tunable filter, bypass on/off, attenator value (not used), RX enable=1 TX mode=0, TX in transmit mode, error code"
 
-  NMEA_String="$RFSTA,";
+  NMEA_String="STST,";
   NMEA_String+=global_qrg;
   NMEA_String+=",";
   NMEA_String+=stepCount;
@@ -413,7 +434,12 @@ void send_nmea_status(){
   NMEA_String+=",";
   NMEA_String+=global_att;
   NMEA_String+=","; 
+  NMEA_String+=TX_mode; 
+  NMEA_String+=","; 
   NMEA_String+=tx_on;
+  NMEA_String+=","; 
+  NMEA_String+=err_code;
+
 
   Serial1.println(NMEA_String);
 }
@@ -434,13 +460,14 @@ void tune_filter(int steps){
       stepCount--;
     }
     delay(5);
+    IWatchdog.reload();
     reset_holding();
     }
    keyb_enable();
    global_qrg=initial_qrg-int((stepCount*1000)/steps_per_MHz);
    disp_qrg(global_qrg);    //show approx freq on LCD
-   //Serial1.print("  StepCount ");
-   //Serial1.println(stepCount);  
+   if (debug_level>2) Serial1.print("  StepCount ");
+   if (debug_level>2) Serial1.println(stepCount);  
    steps=0;
   }
 
@@ -454,8 +481,8 @@ void loop() {
 
   if (step_inc !=0) {                                         //change of encoder status
     keyb_disable();                                           //this is not working I think
-   // Serial1.print("step_inc ");
-   // Serial1.print(step_inc);  
+   if (debug_level>2) Serial1.print("step_inc ");
+   if (debug_level>2) Serial1.print(step_inc);  
     tune_filter((-1)*step_inc);                              // step UP truns freuency down, thus -1*step. 
     step_inc=0;
     keyb_enable();
@@ -501,7 +528,7 @@ void loop() {
                    
                    if (sign_l=='r') {
                     reset_step();
-                    Serial1.println("reset");
+                    if (debug_level>1) Serial1.println("reset");
                    }
                    else
 
@@ -521,6 +548,12 @@ void loop() {
                     if (comm[3]=='1') { 
                       bypass_filter(1); }
                    }
+
+                   else
+                   if (sign_l=='?') {
+                     send_status();
+                   }
+
                    else
 
                    {
@@ -542,12 +575,7 @@ void loop() {
                       
                       }                    
                    
-                   // Serial1.print("steps:");
-                   // Serial1.println(step_inc1);
-                   // Serial1.print("qrg:" );
-                   // global_qrg=initial_qrg-int((stepCount*1000)/steps_per_MHz);
-                   // Serial1.println(global_qrg);
-                    //disp_qrg(global_qrg);    //show approx freq on LCD
+                 
                    }
                    else{
                      Serial1.println("hmmmm?");
@@ -559,7 +587,8 @@ void loop() {
   }
   // step one step:
   
-  
+IWatchdog.reload();             //restet watchdog
+
 }
 
   #ifdef STM32DUINO_CORE                     //checks encoder every 1ms
