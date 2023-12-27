@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name "lna_switch_2-rescue")(type "Legacy")(uri "${KIPRJMOD}/lna_switch_2-rescue.lib")(options "")(descr ""))
+)
