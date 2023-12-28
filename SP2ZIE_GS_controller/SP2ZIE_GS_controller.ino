@@ -114,6 +114,8 @@ void setup() {
      reset_step();
   }
 
+  bypass_filter(bypass_on);
+
 IWatchdog.begin(500000);    //watchdog set to approx 500ms
 
 }
@@ -236,7 +238,7 @@ timer_start=millis();
 
  
  
-    
+  send_status();  
   error_handler();
 }
 
@@ -365,23 +367,25 @@ err_code=(err_code & B11111101);                                //resets error c
   
   reset_holding();  //resets holding power to reduce current consumption and heat generation
   error_handler();
+  send_status();
 }
 
 void bypass_filter(boolean on){
 
   //digitalWrite(FLTR_BPS, !on);  //set pypass pin to appropriate state
   if (on==1) {
-    lcd.setCursor(0, 0);       //update info on LCD
-    lcd.print(" -BYPASS- ");
-    bypass_on=1;
+
+    bypass_on=0;
+    disp_qrg(global_qrg);               //this will display bypass as well
     digitalWrite(FLTR_BPS,LOW);
   }
   else {
-    disp_qrg(global_qrg);
-    lcd.setCursor(0, 0);
     bypass_on=0;
+    disp_qrg(global_qrg);
+    //lcd.setCursor(0, 0);
     digitalWrite(FLTR_BPS,HIGH);
   }
+  send_status();
   
 }
 
@@ -468,6 +472,7 @@ void tune_filter(int steps){
    disp_qrg(global_qrg);    //show approx freq on LCD
    if (debug_level>2) Serial1.print("  StepCount ");
    if (debug_level>2) Serial1.println(stepCount);  
+   send_status();
    steps=0;
   }
 
@@ -556,6 +561,7 @@ void loop() {
 
                    else
 
+                  if ((sign_l=='+') | (sign_l=='-'))
                    {
                       step_l=comm.substring(3);
                       step_inc1=step_l.toInt();
