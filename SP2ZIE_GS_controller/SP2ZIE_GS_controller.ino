@@ -1,9 +1,13 @@
 
+
+
+
 //This simple program is for driving filter/LNA/distributor made for SP2ZIE PWSat-3 Ground Station
 
 #include <Stepper.h>       // for stepper motor in filter
 #include <Wire.h>
-#include <LiquidCrystal_I2C.h>   //although it is not for STM32 it works.
+#include <LiquidCrystal_I2C.h>
+// #include <LiquidCrystal_I2C.h>   //although it is not for STM32 it works.
 #include <IWatchdog.h>               //watchdog 
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -27,7 +31,7 @@ byte steps_per_MHz = 93;    // number of steps per MHz of cf band change
 long initial_qrg = 440870;  // freqiency in kHz (frequency after reset / on limit switch)
 long global_qrg;            // current frq;
 byte global_att = 1;        // global_var atteunation;
-byte bypass_on = 1;         // bypass sysus 1=on, 0=off
+byte bypass_on = 1;         // bypass status 1=on, 0=off  (turn on with bypass actiated)
 byte tx_on = 0;             // tx status 1=on, 0=off;
 String comm;
 int letter=0;
@@ -114,7 +118,7 @@ void setup() {
      reset_step();
   }
 
-  bypass_filter(bypass_on);
+  bypass_filter(1);       //enable filter bypass
 
 IWatchdog.begin(500000);    //watchdog set to approx 500ms
 
@@ -374,16 +378,17 @@ void bypass_filter(boolean on){
 
   //digitalWrite(FLTR_BPS, !on);  //set pypass pin to appropriate state
   if (on==1) {
-
-    bypass_on=0;
-    disp_qrg(global_qrg);               //this will display bypass as well
+    
     digitalWrite(FLTR_BPS,LOW);
+    disp_qrg(global_qrg);               //this will display bypass as well
+    bypass_on=1;
   }
   else {
-    bypass_on=0;
-    disp_qrg(global_qrg);
+    
     //lcd.setCursor(0, 0);
     digitalWrite(FLTR_BPS,HIGH);
+    disp_qrg(global_qrg);
+    bypass_on=0;
   }
   send_status();
   
@@ -490,8 +495,6 @@ void loop() {
    if (debug_level>2) Serial1.print(step_inc);  
     tune_filter((-1)*step_inc);                              // step UP truns freuency down, thus -1*step. 
     step_inc=0;
-    keyb_enable();
-
   } 
   
   if (prev_att!=global_att){           //if we have change in att. seting
