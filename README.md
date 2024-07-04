@@ -38,7 +38,10 @@ Embedded software is written in Arduino environment and it is available in appro
 
 
 ## LNA Box
+![alt text](https://github.com/sq2dk/GS-Schooner/blob/main/LNA_BOX.jpg?raw=true)
+![alt text](https://github.com/sq2dk/GS-Schooner/blob/main/lna_box.png?raw=true)
 
+This part contains LNA, RF bandpass filter, RF relay and electronic driver for relay and LNA power supply. Schematic and PCB design for driver is included in appropriate folder. This is a simple transistor and relay switch. 4 wire interface to GS controlled is used. 12V power, ground, RX signal (to GND) and feedback signal are passed from/to GS controller. Separate TX and RX lines are feed from GS controller to LNA box. Although this solution requires extra coaxial cable, it simplifies design a bit, since other coaxial relay for TX/RX switching can be placed in below deck equipment (BDE).  
 ## Antenna system
 
 ![alt text](https://github.com/sq2dk/GS-Schooner/blob/main/anteny_2.jpg?raw=true)
