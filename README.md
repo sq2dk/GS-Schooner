@@ -5,6 +5,10 @@ This is repository for Ground Station for PWSat-3 satellite.
 
 ![alt text](https://github.com/sq2dk/GS-Schooner/blob/main/controller4.jpg?raw=true)
 
+## Overview
+
+![alt text](https://github.com/sq2dk/GS-Schooner/blob/main/PW-Sat3-GS_Schematic.png?raw=true)
+
 ## GS controller
 
 ![alt text](https://github.com/sq2dk/GS-Schooner/blob/main/PW-Sat3-GS_controller.png?raw=true)
